@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Condominio Portal de Lampa | El Pellín 1770</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel para compilar JSX directamente en el navegador (ideal para GitHub Pages) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // ============================================================================
+    // CREDENCIALES FIJAS DE SUPABASE (CONDOMINIO PORTAL DE LAMPA)
+    // ============================================================================
+    const DEFAULT_SUPABASE_URL = "https://ewksfaamizxugjxhxyiu.supabase.co";
+    const DEFAULT_SUPABASE_KEY = "sb_publishable_Z-79MDbqVfis18UYIkh53Q_lz5-N0Ok";
+    const DEFAULT_ADMIN_PIN = "1770";
+
+    const TORRES = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const PISOS = [1, 2, 3, 4];
+    const DPTOS_POR_PISO = [1, 2, 3, 4];
+
+    const generarBaseInicial96Dptos = () => {
+      const lista = [];
+      TORRES.forEach((torre) => {
+        PISOS.forEach((piso) => {
+          DPTOS_POR_PISO.forEach((num) => {
+            const id = `${torre}${piso}${num}`;
+            lista.push({
+              id,
+              torre,
+              piso,
+              numero: num,
+              residente: `Residente Dpto ${id} (Por empadronar)`,
+              rut: 'Pendiente',
+              propietario: 'Por verificar',
+              telefono: '',
+              email: '',
+              registro_verificado: false,
+              estado: 'Al día',
+              gasto_base: 68000,
+              agua_caliente: 12000,
+              fondo_reserva: 3400,
+              multas: 0,
+              saldo_anterior: 0,
+              pagado: 83400,
+              ultima_actualizacion: '15/11/2026'
+            });
+          });
+        });
+      });
+      return lista;
+    };
+
+    const EGRESOS_INICIALES = [
+      { id: 'EGR-01', categoria: 'Remuneraciones Conserjería y Aseo', proveedor: 'Personal de Planta (6 Turnos)', monto: 3850000, fecha: '05/11/2026', estado: 'Pagado' },
+      { id: 'EGR-02', categoria: 'Electricidad Espacios Comunes y Bombas', proveedor: 'Enel Distribución', monto: 980000, fecha: '08/11/2026', estado: 'Pagado' },
+      { id: 'EGR-03', categoria: 'Agua Potable y Riego Áreas Verdes', proveedor: 'Aguas Andinas / Red Lampa', monto: 720000, fecha: '10/11/2026', estado: 'Pagado' },
+      { id: 'EGR-04', categoria: 'Mantención Portón Eléctrico y Citofonía', proveedor: 'Seguridad Industrial SpA', monto: 420000, fecha: '12/11/2026', estado: 'Pagado' },
+      { id: 'EGR-05', categoria: 'Insumos de Aseo y Mantención Jardines', proveedor: 'Comercial Lampa Verde', monto: 310000, fecha: '14/11/2026', estado: 'Pagado' }
+    ];
+
+    const COMUNICADOS_INICIALES = [
+      {
+        id: 'COM-01',
+        titulo: 'Bienvenidos al Portal Oficial - Condominio Portal de Lampa',
+        fecha: '15/11/2026',
+        prioridad: 'Alta',
+        mensaje: 'Vecinos de El Pellín 1770: Ya se encuentra habilitado nuestro portal digital para las 6 torres (A a F). Por favor ingresen a la pestaña "Registrar mi WhatsApp / Mis Datos" para recibir sus colillas y avisos directamente en su teléfono.'
+      },
+      {
+        id: 'COM-02',
+        titulo: 'Mantención Preventiva Sala de Bombas Hidropack',
+        fecha: '14/11/2026',
+        prioridad: 'Media',
+        mensaje: 'Este miércoles entre las 10:00 y 12:30 hrs se realizará inspección técnica programada en el sistema de impulsión de agua de las Torres A a la F.'
+      }
+    ];
+
+    const SOLICITUDES_INICIALES = [
+      {
+        id: 'SOL-101',
+        dpto: 'A12',
+        vecino: 'Vecina Dpto A12',
+        telefono: '',
+        tipo: 'Detalle de Consumo / Gasto Común',
+        asunto: 'Consulta lectura de agua caliente mes actual',
+        mensaje: 'Hola Administración, quisiera solicitar el desglose de mi consumo de este mes y saber cómo recibo el comprobante.',
+        fecha: '15/11/2026',
+        estado: 'Pendiente',
+        respuesta: ''
+      }
+    ];
+
+    const formatCLP = (valor) => {
+      const num = Number(valor) || 0;
+      return '$' + num.toLocaleString('es-CL');
+    };
+
+    const calcularTotalDeuda = (d) => {
+      const totalMes = (Number(d.gasto_base) || 0) + (Number(d.agua_caliente) || 0) + (Number(d.fondo_reserva) || 0) + (Number(d.multas) || 0) + (Number(d.saldo_anterior) || 0);
+      return Math.max(0, totalMes - (Number(d.pagado) || 0));
+    };
+
+    const calcularTotalFacturado = (d) => {
+      return (Number(d.gasto_base) || 0) + (Number(d.agua_caliente) || 0) + (Number(d.fondo_reserva) || 0) + (Number(d.multas) || 0) + (Number(d.saldo_anterior) || 0);
+    };
+
+    function App() {
+      // INICIA SIEMPRE EN MODO VECINO POR DEFECTO
+      const [role, setRole] = useState('habitante');
+      const [showPinModal, setShowPinModal] = useState(false);
+      const [pinInput, setPinInput] = useState('');
+      const [adminPin, setAdminPin] = useState(DEFAULT_ADMIN_PIN);
+
+      // Pestañas
+      const [adminTab, setAdminTab] = useState('dashboard');
+      const [vecinoTab, setVecinoTab] = useState('colilla');
+
+      // Selección de departamento en Modo Vecino
+      const [selectedTorreVecino, setSelectedTorreVecino] = useState('A');
+      const [selectedDptoVecino, setSelectedDptoVecino] = useState('A11');
+
+      // Base de datos principal
+      const [departamentos, setDepartamentos] = useState(() => generarBaseInicial96Dptos());
+      const [egresos, setEgresos] = useState(EGRESOS_INICIALES);
+      const [comunicados, setComunicados] = useState(COMUNICADOS_INICIALES);
+      const [solicitudes, setSolicitudes] = useState(SOLICITUDES_INICIALES);
+
+      // Estado de conexión Supabase
+      const [supabaseUrl, setSupabaseUrl] = useState(DEFAULT_SUPABASE_URL);
+      const [supabaseKey, setSupabaseKey] = useState(DEFAULT_SUPABASE_KEY);
+      const [syncStatus, setSyncStatus] = useState('Conectando a Supabase...');
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [toastMsg, setToastMsg] = useState(null);
+
+      // Configuración WhatsApp
+      const [whatsappConfig, setWhatsappConfig] = useState({
+        modoPrueba: true,
+        numeroPrueba: '+56987654321',
+        nombreAdmin: 'Administración Condominio Portal de Lampa'
+      });
+      const [waPreviewModal, setWaPreviewModal] = useState(null);
+
+      // Filtros en Administrador
+      const [filtroTorre, setFiltroTorre] = useState('TODAS');
+      const [filtroEstado, setFiltroEstado] = useState('TODOS');
+      const [busquedaDpto, setBusquedaDpto] = useState('');
+      const [vistaMapa, setVistaMapa] = useState(true);
+
+      // Modal Edición de Departamento (Admin)
+      const [editingDpto, setEditingDpto] = useState(null);
+
+      // Modal Respuesta Solicitud (Admin)
+      const [respondingSolicitud, setRespondingSolicitud] = useState(null);
+      const [respuestaTexto, setRespuestaTexto] = useState('');
+
+      // Formularios Nuevos (Egreso y Comunicado)
+      const [nuevoEgreso, setNuevoEgreso] = useState({ categoria: '', proveedor: '', monto: '' });
+      const [nuevoComunicado, setNuevoComunicado] = useState({ titulo: '', prioridad: 'Media', mensaje: '' });
+
+      // Formularios del Vecino (Auto-registro y Nueva Solicitud)
+      const [formRegistroVecino, setFormRegistroVecino] = useState({
+        residente: '',
+        rut: '',
+        propietario: 'Propietario',
+        telefono: '+569',
+        email: ''
+      });
+      const [nuevaSolicitud, setNuevaSolicitud] = useState({
+        tipo: 'Detalle de Consumo / Gasto Común',
+        asunto: '',
+        mensaje: '',
+        telefonoContacto: ''
+      });
+
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(null), 4000);
+      };
+
+      // ========================================================================
+      // CONEXIÓN REST CON SUPABASE
+      // ========================================================================
+      const getSupabaseHeaders = () => ({
+        'apikey': supabaseKey.trim(),
+        'Authorization': `Bearer ${supabaseKey.trim()}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation,resolution=merge-duplicates'
+      });
+
+      const cargarDesdeSupabase = async (silencioso = false) => {
+        const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
+        if (!cleanUrl || !supabaseKey) return;
+        setIsSyncing(true);
+        try {
+          const resDptos = await fetch(`${cleanUrl}/rest/v1/departamentos?select=*&order=id.asc`, {
+            headers: getSupabaseHeaders()
+          });
+          if (resDptos.ok) {
+            const data = await resDptos.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setDepartamentos(data);
+              setSyncStatus(`Conectado en línea (${data.length} dptos en Supabase)`);
+              if (!silencioso) showToast(`Sincronizado: ${data.length} departamentos cargados desde Supabase`);
+            } else {
+              setSyncStatus('Conectado a Supabase (Tabla vacía, usando base local)');
+            }
+          } else {
+            setSyncStatus('Modo Local Activo (Verifica políticas RLS en Supabase)');
+          }
+
+          // Intentar cargar solicitudes, egresos y comunicados si existen
+          const resSol = await fetch(`${cleanUrl}/rest/v1/solicitudes?select=*&order=id.desc`, { headers: getSupabaseHeaders() });
+          if (resSol.ok) {
+            const dataSol = await resSol.json();
+            if (Array.isArray(dataSol) && dataSol.length > 0) setSolicitudes(dataSol);
+          }
+
+          const resCom = await fetch(`${cleanUrl}/rest/v1/comunicados?select=*&order=id.desc`, { headers: getSupabaseHeaders() });
+          if (resCom.ok) {
+            const dataCom = await resCom.json();
+            if (Array.isArray(dataCom) && dataCom.length > 0) setComunicados(dataCom);
+          }
+        } catch (err) {
+          setSyncStatus('Operando en memoria local');
+        } finally {
+          setIsSyncing(false);
+        }
+      };
+
+      const guardarDptoEnSupabase = async (dptoActualizado) => {
+        const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
+        try {
+          const res = await fetch(`${cleanUrl}/rest/v1/departamentos`, {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            body: JSON.stringify(dptoActualizado)
+          });
+          return res.ok;
+        } catch (e) {
+          return false;
+        }
+      };
+
+      const sincronizar96DptosASupabase = async () => {
+        const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
+        setIsSyncing(true);
+        try {
+          const res = await fetch(`${cleanUrl}/rest/v1/departamentos`, {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            body: JSON.stringify(departamentos)
+          });
+          if (res.ok) {
+            setSyncStatus('¡96 Departamentos sincronizados en Supabase!');
+            showToast('¡Los 96 departamentos quedaron guardados en tu Supabase!');
+          } else {
+            showToast('Error al subir a Supabase. Verifica la tabla departamentos.');
+          }
+        } catch (err) {
+          showToast('Error de red al conectar con Supabase.');
+        } finally {
+          setIsSyncing(false);
+        }
+      };
+
+      useEffect(() => {
+        cargarDesdeSupabase(true);
+      }, []);
+
+      // Sincronizar datos del formulario de auto-registro cuando el vecino cambia de dpto
+      const dptoVecinoActual = useMemo(() => {
+        return departamentos.find((d) => d.id === selectedDptoVecino) || departamentos[0];
+      }, [departamentos, selectedDptoVecino]);
+
+      useEffect(() => {
+        if (dptoVecinoActual) {
+          setFormRegistroVecino({
+            residente: dptoVecinoActual.residente.includes('(Por empadronar)') ? '' : dptoVecinoActual.residente,
+            rut: dptoVecinoActual.rut === 'Pendiente' ? '' : dptoVecinoActual.rut,
+            propietario: dptoVecinoActual.propietario === 'Por verificar' ? 'Propietario' : dptoVecinoActual.propietario,
+            telefono: dptoVecinoActual.telefono || '+569',
+            email: dptoVecinoActual.email || ''
+          });
+          setNuevaSolicitud((prev) => ({
+            ...prev,
+            telefonoContacto: dptoVecinoActual.telefono || '+569'
+          }));
+        }
+      }, [dptoVecinoActual]);
+
+      // Estadísticas Globales Financieras
+      const stats = useMemo(() => {
+        let totalFacturado = 0;
+        let totalRecaudado = 0;
+        let totalPorCobrar = 0;
+        let totalFondoReserva = 0;
+        let alDia = 0;
+        let pendientes = 0;
+        let morosos = 0;
+        let empadronados = 0;
+
+        departamentos.forEach((d) => {
+          const fact = calcularTotalFacturado(d);
+          const deuda = calcularTotalDeuda(d);
+          totalFacturado += fact;
+          totalRecaudado += Number(d.pagado) || 0;
+          totalPorCobrar += deuda;
+          totalFondoReserva += Number(d.fondo_reserva) || 0;
+
+          if (d.estado === 'Al día') alDia++;
+          else if (d.estado === 'Pendiente') pendientes++;
+          else morosos++;
+
+          if (d.telefono && d.telefono.trim().length >= 8) empadronados++;
+        });
+
+        const totalEgresos = egresos.reduce((acc, e) => acc + (Number(e.monto) || 0), 0);
+        const porcentajeRecaudacion = totalFacturado > 0 ? Math.round((totalRecaudado / totalFacturado) * 100) : 0;
+
+        return {
+          totalFacturado,
+          totalRecaudado,
+          totalPorCobrar,
+          totalFondoReserva,
+          totalEgresos,
+          saldoCaja: totalRecaudado - totalEgresos,
+          alDia,
+          pendientes,
+          morosos,
+          empadronados,
+          porcentajeRecaudacion
+        };
+      }, [departamentos, egresos]);
+
+      // Departamentos filtrados para la tabla del Administrador
+      const dptosFiltrados = useMemo(() => {
+        return departamentos.filter((d) => {
+          if (filtroTorre !== 'TODAS' && d.torre !== filtroTorre) return false;
+          if (filtroEstado === 'SIN_WHATSAPP' && d.telefono && d.telefono.trim().length >= 8) return false;
+          if (filtroEstado !== 'TODOS' && filtroEstado !== 'SIN_WHATSAPP' && d.estado !== filtroEstado) return false;
+          if (busquedaDpto.trim() !== '') {
+            const q = busquedaDpto.toLowerCase();
+            return d.id.toLowerCase().includes(q) || (d.residente && d.residente.toLowerCase().includes(q));
+          }
+          return true;
+        });
+      }, [departamentos, filtroTorre, filtroEstado, busquedaDpto]);
+
+      // Función para preparar y abrir WhatsApp
+      const abrirModalWhatsApp = (dptoId, nombreVecino, telefonoVecino, motivo, detalleTexto) => {
+        const destinoReal = telefonoVecino && telefonoVecino.trim().length >= 8 ? telefonoVecino.trim() : '';
+        const numeroElegido = whatsappConfig.modoPrueba ? whatsappConfig.numeroPrueba : (destinoReal || whatsappConfig.numeroPrueba);
+        const numLimpio = numeroElegido.replace(/[^0-9]/g, '');
+
+        const mensajeCompleto =
+          `🏢 *CONDOMINIO PORTAL DE LAMPA*\n` +
+          `📍 *Dirección:* El Pellín 1770, Lampa\n` +
+          `----------------------------------\n` +
+          `Hola *${nombreVecino}* (*Dpto ${dptoId}*):\n\n` +
+          `Le informamos respecto a: *${motivo}*\n\n` +
+          `${detalleTexto}\n\n` +
+          `Atentamente,\n` +
+          `*${whatsappConfig.nombreAdmin}*`;
+
+        const urlWa = `https://wa.me/${numLimpio}?text=${encodeURIComponent(mensajeCompleto)}`;
+        setWaPreviewModal({
+          dptoId,
+          nombreVecino,
+          telefonoReal: destinoReal || 'No registrado aún',
+          numeroEnvio: numeroElegido,
+          modoPrueba: whatsappConfig.modoPrueba,
+          mensajeCompleto,
+          urlWa
+        });
+      };
+
+      // Guardar edición de un departamento (Modo Admin)
+      const handleSaveDpto = async (e) => {
+        e.preventDefault();
+        if (!editingDpto) return;
+
+        const deuda = calcularTotalDeuda(editingDpto);
+        const estadoCalculado = deuda === 0 ? 'Al día' : editingDpto.estado === 'Al día' ? 'Pendiente' : editingDpto.estado;
+
+        const actualizado = {
+          ...editingDpto,
+          estado: estadoCalculado,
+          ultima_actualizacion: new Date().toLocaleDateString('es-CL')
+        };
+
+        setDepartamentos((prev) => prev.map((d) => (d.id === actualizado.id ? actualizado : d)));
+        setEditingDpto(null);
+        await guardarDptoEnSupabase(actualizado);
+        showToast(`Departamento ${actualizado.id} actualizado en la base de datos`);
+      };
+
+      // Conciliar Pago Rápido en 1 Clic (Modo Admin)
+      const conciliarPagoTotal = async (dpto) => {
+        const totalMes = calcularTotalFacturado(dpto);
+        const actualizado = {
+          ...dpto,
+          pagado: totalMes,
+          estado: 'Al día',
+          ultima_actualizacion: new Date().toLocaleDateString('es-CL')
+        };
+        setDepartamentos((prev) => prev.map((item) => (item.id === dpto.id ? actualizado : item)));
+        await guardarDptoEnSupabase(actualizado);
+        showToast(`Pago conciliado para Dpto ${dpto.id} (${formatCLP(totalMes)})`);
+      };
+
+      // Auto-registro de WhatsApp por parte del Vecino
+      const handleVecinoGuardarDatos = async (e) => {
+        e.preventDefault();
+        if (!formRegistroVecino.residente.trim() || !formRegistroVecino.telefono.trim()) {
+          showToast('Por favor ingresa tu nombre y número de WhatsApp');
+          return;
+        }
+        const actualizado = {
+          ...dptoVecinoActual,
+          residente: formRegistroVecino.residente.trim(),
+          rut: formRegistroVecino.rut.trim() || 'Verificado',
+          propietario: formRegistroVecino.propietario,
+          telefono: formRegistroVecino.telefono.trim(),
+          email: formRegistroVecino.email.trim(),
+          registro_verificado: true,
+          ultima_actualizacion: new Date().toLocaleDateString('es-CL')
+        };
+
+        setDepartamentos((prev) => prev.map((d) => (d.id === actualizado.id ? actualizado : d)));
+        await guardarDptoEnSupabase(actualizado);
+        showToast(`¡Datos y WhatsApp del Dpto ${actualizado.id} guardados con éxito!`);
+        setVecinoTab('colilla');
+      };
+
+      // Enviar solicitud del Vecino a la Administración
+      const handleVecinoEnviarSolicitud = async (e) => {
+        e.preventDefault();
+        if (!nuevaSolicitud.asunto.trim() || !nuevaSolicitud.mensaje.trim()) {
+          showToast('Completa el asunto y el detalle de tu solicitud');
+          return;
+        }
+
+        const telIngresado = nuevaSolicitud.telefonoContacto.trim();
+        const nueva = {
+          id: `SOL-${Math.floor(100 + Math.random() * 900)}`,
+          dpto: selectedDptoVecino,
+          vecino: dptoVecinoActual.residente,
+          telefono: telIngresado || dptoVecinoActual.telefono || '',
+          tipo: nuevaSolicitud.tipo,
+          asunto: nuevaSolicitud.asunto.trim(),
+          mensaje: nuevaSolicitud.mensaje.trim(),
+          fecha: new Date().toLocaleDateString('es-CL'),
+          estado: 'Pendiente',
+          respuesta: ''
+        };
+
+        setSolicitudes((prev) => [nueva, ...prev]);
+
+        // Si el vecino anotó su WhatsApp en la solicitud, actualizamos su ficha automáticamente
+        if (telIngresado && telIngresado.length >= 8 && telIngresado !== dptoVecinoActual.telefono) {
+          const dptoUpd = { ...dptoVecinoActual, telefono: telIngresado, registro_verificado: true };
+          setDepartamentos((prev) => prev.map((d) => (d.id === dptoUpd.id ? dptoUpd : d)));
+          await guardarDptoEnSupabase(dptoUpd);
+        }
+
+        // Guardar en tabla solicitudes de Supabase si está disponible
+        try {
+          const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
+          await fetch(`${cleanUrl}/rest/v1/solicitudes`, {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            body: JSON.stringify(nueva)
+          });
+        } catch (err) {}
+
+        setNuevaSolicitud({ tipo: 'Detalle de Consumo / Gasto Común', asunto: '', mensaje: '', telefonoContacto: telIngresado });
+        showToast(`Solicitud enviada a la Administración del Condominio Portal de Lampa`);
+      };
+
+      // Responder solicitud como Administrador
+      const guardarRespuestaSolicitud = async (enviarPorWa) => {
+        if (!respondingSolicitud || !respuestaTexto.trim()) return;
+        const actualizada = {
+          ...respondingSolicitud,
+          estado: 'Resuelto',
+          respuesta: respuestaTexto.trim()
+        };
+
+        setSolicitudes((prev) => prev.map((s) => (s.id === actualizada.id ? actualizada : s)));
+
+        try {
+          const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
+          await fetch(`${cleanUrl}/rest/v1/solicitudes`, {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            body: JSON.stringify(actualizada)
+          });
+        } catch (e) {}
+
+        const dptoFicha = departamentos.find((d) => d.id === actualizada.dpto);
+        const telefonoDestino = actualizada.telefono || (dptoFicha ? dptoFicha.telefono : '');
+
+        setRespondingSolicitud(null);
+        setRespuestaTexto('');
+        showToast(`Solicitud ${actualizada.id} marcada como Resuelta`);
+
+        if (enviarPorWa) {
+          abrirModalWhatsApp(
+            actualizada.dpto,
+            actualizada.vecino,
+            telefonoDestino,
+            `Respuesta a su solicitud (${actualizada.asunto})`,
+            `✅ *Respuesta de Administración:*\n"${actualizada.respuesta}"\n\nTambién puede ver el detalle actualizado ingresando al portal web del condominio.`
+          );
+        }
+      };
+
+      // Verificar PIN para pasar a Modo Administrador
+      const handlePinSubmit = (e) => {
+        e.preventDefault();
+        if (pinInput === adminPin) {
+          setRole('admin');
+          setShowPinModal(false);
+          setPinInput('');
+          showToast('Modo Administrador desbloqueado');
+        } else {
+          showToast('PIN incorrecto. Por defecto es 1770');
+        }
+      };
+
+      const solicitudesDelVecino = solicitudes.filter((s) => s.dpto === selectedDptoVecino);
+      const respuestasResueltasVecino = solicitudesDelVecino.filter((s) => s.estado === 'Resuelto').length;
+
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-50">
+          {/* NOTIFICACIÓN FLOTANTE (TOAST) */}
+          {toastMsg && (
+            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-bounce">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <span className="text-sm font-medium">{toastMsg}</span>
+            </div>
+          )}
+
+          {/* BARRA SUPERIOR PRINCIPAL */}
+          <header className="bg-slate-900 text-white shadow-lg border-b border-slate-800 sticky top-0 z-30">
+            <div className="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center font-extrabold text-lg shadow-md">
+                  PL
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-bold text-lg tracking-tight">Condominio Portal de Lampa</h1>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-slate-700 font-medium">
+                      El Pellín 1770
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    6 Torres (A - F) • 4 Pisos • 96 Departamentos • {syncStatus}
+                  </p>
+                </div>
+              </div>
+
+              {/* CAMBIO DE MODO: VECINO POR DEFECTO / ACCESO ADMIN CON PIN */}
+              <div className="flex items-center gap-3">
+                {role === 'habitante' ? (
+                  <>
+                    <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold">
+                      👤 Vista Vecino / Habitante
+                    </span>
+                    <button
+                      onClick={() => setShowPinModal(true)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition flex items-center gap-2"
+                    >
+                      🔒 Acceso Administración
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold">
+                      🛠️ Modo Administrador Activo
+                    </span>
+                    <button
+                      onClick={() => setRole('habitante')}
+                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
+                    >
+                      Volver a Vista Vecino
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* ================================================================= */}
+          {/* VISTA HABITANTE / VECINO (MODO POR DEFECTO AL ABRIR LA WEB)       */}
+          {/* ================================================================= */}
+          {role === 'habitante' && (
+            <main className="max-w-6xl mx-auto w-full px-4 py-6 space-y-6 flex-1">
+              {/* SELECTOR DE TORRE Y DEPARTAMENTO DEL VECINO */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                    Portal de Autoatención Vecinos • El Pellín 1770
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-900 mt-0.5">
+                    Selecciona tu Torre y Departamento
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Consulta tu gasto común, transparencia del condominio o solicita información a la Administración.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Torre</label>
+                    <div className="flex gap-1">
+                      {TORRES.map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => {
+                            setSelectedTorreVecino(t);
+                            setSelectedDptoVecino(`${t}11`);
+                          }}
+                          className={`w-9 h-9 rounded-lg font-bold text-sm transition ${
+                            selectedTorreVecino === t
+                              ? 'bg-indigo-600 text-white shadow'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Departamento</label>
+                    <select
+                      value={selectedDptoVecino}
+                      onChange={(e) => setSelectedDptoVecino(e.target.value)}
+                      className="px-3.5 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {departamentos
+                        .filter((d) => d.torre === selectedTorreVecino)
+                        .map((d) => (
+                          <option key={d.id} value={d.id}>
+                            Dpto {d.id} (Piso {d.piso})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* ALERTA SI EL DEPARTAMENTO NO TIENE WHATSAPP REGISTRADO */}
+              {(!dptoVecinoActual.telefono || dptoVecinoActual.telefono.trim().length < 8) && (
+                <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📲</span>
+                    <div>
+                      <h3 className="font-bold text-amber-900 text-sm">
+                        El Departamento {dptoVecinoActual.id} aún no tiene un WhatsApp registrado
+                      </h3>
+                      <p className="text-xs text-amber-800">
+                        Registra tus datos para que la Administración pueda enviarte comprobantes y respuestas directo a tu celular.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setVecinoTab('registro')}
+                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow transition"
+                  >
+                    Registrar mi WhatsApp Ahora
+                  </button>
+                </div>
+              )}
+
+              {/* NAVEGACIÓN DEL VECINO */}
+              <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+                <button
+                  onClick={() => setVecinoTab('colilla')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    vecinoTab === 'colilla'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  📄 Mi Colilla de Gasto Común ({dptoVecinoActual.id})
+                </button>
+                <button
+                  onClick={() => setVecinoTab('transparencia')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    vecinoTab === 'transparencia'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  📊 Dashboard de Transparencia y Avisos
+                </button>
+                <button
+                  onClick={() => setVecinoTab('solicitudes')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                    vecinoTab === 'solicitudes'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>💬 Solicitar a la Administración</span>
+                  {respuestasResueltasVecino > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px]">
+                      {respuestasResueltasVecino} Respuesta(s)
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setVecinoTab('registro')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    vecinoTab === 'registro'
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'bg-white text-emerald-700 border border-emerald-300 hover:bg-emerald-50'
+                  }`}
+                >
+                  📲 Registrar mi WhatsApp / Mis Datos
+                </button>
+              </div>
+
+              {/* CONTENIDO PESTAÑA 1: MI COLILLA (SOLO LECTURA) */}
+              {vecinoTab === 'colilla' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Colilla Oficial Mensual • Solo Lectura
+                        </span>
+                        <h3 className="text-2xl font-extrabold text-slate-900">
+                          Departamento {dptoVecinoActual.id} (Torre {dptoVecinoActual.torre} - Piso {dptoVecinoActual.piso})
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Residente: <strong>{dptoVecinoActual.residente}</strong> • Última actualización: {dptoVecinoActual.ultima_actualizacion}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold ${
+                          dptoVecinoActual.estado === 'Al día'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : dptoVecinoActual.estado === 'Pendiente'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        Estado: {dptoVecinoActual.estado}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-600">Gasto Común Base Mensual (Prorrateo 1/96)</span>
+                        <span className="font-bold text-slate-900">{formatCLP(dptoVecinoActual.gasto_base)}</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-600">Consumo Individual Agua / Calefacción</span>
+                        <span className="font-bold text-slate-900">{formatCLP(dptoVecinoActual.agua_caliente)}</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-600">Fondo de Reserva Legal (5%)</span>
+                        <span className="font-bold text-slate-900">{formatCLP(dptoVecinoActual.fondo_reserva)}</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-600">Multas o Recargos del Período</span>
+                        <span className="font-bold text-slate-900">{formatCLP(dptoVecinoActual.multas)}</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-600">Saldo Anterior Pendiente</span>
+                        <span className="font-bold text-slate-900">{formatCLP(dptoVecinoActual.saldo_anterior)}</span>
+                      </div>
+                      <div className="flex justify-between py-2.5 bg-slate-50 px-3 rounded-xl font-bold text-slate-800">
+                        <span>Total Facturado del Mes</span>
+                        <span>{formatCLP(calcularTotalFacturado(dptoVecinoActual))}</span>
+                      </div>
+                      <div className="flex justify-between py-2 px-3 text-emerald-700 font-semibold">
+                        <span>Monto Abonado / Pagado</span>
+                        <span>- {formatCLP(dptoVecinoActual.pagado)}</span>
+                      </div>
+                      <div className="flex justify-between py-3.5 px-4 bg-indigo-900 text-white rounded-xl text-base font-extrabold">
+                        <span>Saldo Total a Pagar</span>
+                        <span>{formatCLP(calcularTotalDeuda(dptoVecinoActual))}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DATOS DE TRANSFERENCIA Y ACCIÓN RÁPIDA */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+                    <div className="space-y-3">
+                      <h4 className="font-bold text-slate-900 text-base">
+                        🏦 Datos Bancarios Comunidad
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Realiza tu transferencia indicando en el asunto <strong>Dpto {dptoVecinoActual.id}</strong> y luego informa tu pago o solicita revisión en la pestaña de solicitudes.
+                      </p>
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 text-slate-700">
+                        <p><strong>Nombre:</strong> Comunidad Condominio Portal de Lampa</p>
+                        <p><strong>Dirección:</strong> El Pellín 1770, Lampa</p>
+                        <p><strong>Banco:</strong> BancoEstado / Cuenta Comunidad</p>
+                        <p><strong>Asunto obligatorio:</strong> Gasto Común Dpto {dptoVecinoActual.id}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setVecinoTab('solicitudes')}
+                      className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow transition"
+                    >
+                      💬 Informar Pago o Pedir Detalle de Consumo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO PESTAÑA 2: DASHBOARD DE TRANSPARENCIA Y COMUNICADOS */}
+              {vecinoTab === 'transparencia' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs text-slate-500 font-semibold">Recaudación Mes Actual (96 Dptos)</span>
+                      <p className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCLP(stats.totalRecaudado)}</p>
+                      <p className="text-xs text-slate-400 mt-1">{stats.porcentajeRecaudacion}% del total facturado</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs text-slate-500 font-semibold">Egresos y Gastos del Condominio</span>
+                      <p className="text-2xl font-extrabold text-slate-900 mt-1">{formatCLP(stats.totalEgresos)}</p>
+                      <p className="text-xs text-slate-400 mt-1">Facturas rendidas por Administración</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs text-slate-500 font-semibold">Fondo de Reserva Acumulado</span>
+                      <p className="text-2xl font-extrabold text-indigo-600 mt-1">{formatCLP(stats.totalFondoReserva)}</p>
+                      <p className="text-xs text-slate-400 mt-1">Respaldo para emergencias en las 6 torres</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Rendición de gastos comunes */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                      <h3 className="font-bold text-slate-900 text-base mb-3">
+                        🧾 Rendición Transparente de Egresos del Mes
+                      </h3>
+                      <div className="space-y-2.5">
+                        {egresos.map((eg) => (
+                          <div key={eg.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+                            <div>
+                              <p className="font-bold text-slate-800">{eg.categoria}</p>
+                              <p className="text-slate-500">{eg.proveedor} • Fecha: {eg.fecha}</p>
+                            </div>
+                            <span className="font-extrabold text-slate-900">{formatCLP(eg.monto)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Mural de Comunicados */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                      <h3 className="font-bold text-slate-900 text-base mb-3">
+                        📢 Mural Oficial de Comunicados (El Pellín 1770)
+                      </h3>
+                      <div className="space-y-3">
+                        {comunicados.map((c) => (
+                          <div key={c.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900 text-sm">{c.titulo}</span>
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-semibold">
+                                {c.fecha}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 leading-relaxed">{c.mensaje}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO PESTAÑA 3: SOLICITUDES A LA ADMINISTRACIÓN */}
+              {vecinoTab === 'solicitudes' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <form onSubmit={handleVecinoEnviarSolicitud} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+                    <h3 className="font-bold text-slate-900 text-lg">
+                      💬 Enviar Solicitud a la Administración (Dpto {selectedDptoVecino})
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Pide el detalle de tu consumo de agua/gasto común, informa una transferencia o reporta una novedad en tu torre.
+                    </p>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Tipo de Solicitud</label>
+                      <select
+                        value={nuevaSolicitud.tipo}
+                        onChange={(e) => setNuevaSolicitud({ ...nuevaSolicitud, tipo: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-slate-50"
+                      >
+                        <option>Detalle de Consumo / Gasto Común</option>
+                        <option>Informar Comprobante de Transferencia</option>
+                        <option>Certificado de Deuda / Paz y Salvo</option>
+                        <option>Mantención / Espacios Comunes</option>
+                        <option>Consulta General a Administración</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        ¿A qué WhatsApp te enviamos la respuesta?
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="+56912345678"
+                        value={nuevaSolicitud.telefonoContacto}
+                        onChange={(e) => setNuevaSolicitud({ ...nuevaSolicitud, telefonoContacto: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Asunto Breve</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Solicito lectura de medidor o envío comprobante mes actual"
+                        value={nuevaSolicitud.asunto}
+                        onChange={(e) => setNuevaSolicitud({ ...nuevaSolicitud, asunto: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Mensaje o Detalle</label>
+                      <textarea
+                        rows="3"
+                        placeholder="Escribe aquí los detalles para la Administración..."
+                        value={nuevaSolicitud.mensaje}
+                        onChange={(e) => setNuevaSolicitud({ ...nuevaSolicitud, mensaje: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      ></textarea>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow transition"
+                    >
+                      Enviar Solicitud a la Administración
+                    </button>
+                  </form>
+
+                  {/* Historial de Solicitudes y Respuestas del Departamento */}
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+                    <h3 className="font-bold text-slate-900 text-lg">
+                      🔔 Historial y Respuestas del Dpto {selectedDptoVecino}
+                    </h3>
+                    {solicitudesDelVecino.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        Este departamento aún no registra solicitudes enviadas.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {solicitudesDelVecino.map((s) => (
+                          <div key={s.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-indigo-700">{s.tipo}</span>
+                              <span
+                                className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold ${
+                                  s.estado === 'Resuelto'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {s.estado}
+                              </span>
+                            </div>
+                            <p className="font-bold text-slate-900 text-sm">{s.asunto}</p>
+                            <p className="text-xs text-slate-600">{s.mensaje}</p>
+                            {s.respuesta && (
+                              <div className="mt-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
+                                <strong>✅ Respuesta Administración:</strong> {s.respuesta}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO PESTAÑA 4: AUTO-REGISTRO DE WHATSAPP Y DATOS DEL VECINO */}
+              {vecinoTab === 'registro' && (
+                <form onSubmit={handleVecinoGuardarDatos} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm max-w-2xl mx-auto space-y-4">
+                  <div>
+                    <span className="text-xs font-bold text-emerald-600 uppercase">
+                      Empadronamiento Oficial de Residentes • El Pellín 1770
+                    </span>
+                    <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                      📲 Registrar WhatsApp y Datos del Departamento {selectedDptoVecino}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Al guardar este formulario, tus datos quedan actualizados inmediatamente en la base de datos de la Administración para enviarte avisos y respuestas por WhatsApp.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Nombre y Apellido Residente</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: María González"
+                        value={formRegistroVecino.residente}
+                        onChange={(e) => setFormRegistroVecino({ ...formRegistroVecino, residente: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">RUT Residente</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 15.345.678-9"
+                        value={formRegistroVecino.rut}
+                        onChange={(e) => setFormRegistroVecino({ ...formRegistroVecino, rut: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Teléfono WhatsApp (Con +569)</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="+56912345678"
+                        value={formRegistroVecino.telefono}
+                        onChange={(e) => setFormRegistroVecino({ ...formRegistroVecino, telefono: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-emerald-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Calidad de Ocupación</label>
+                      <select
+                        value={formRegistroVecino.propietario}
+                        onChange={(e) => setFormRegistroVecino({ ...formRegistroVecino, propietario: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-slate-50"
+                      >
+                        <option value="Propietario">Propietario Habitante</option>
+                        <option value="Arrendatario">Arrendatario</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Correo Electrónico</label>
+                      <input
+                        type="email"
+                        placeholder="vecino@correo.cl"
+                        value={formRegistroVecino.email}
+                        onChange={(e) => setFormRegistroVecino({ ...formRegistroVecino, email: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow transition"
+                  >
+                    Guardar Datos del Dpto {selectedDptoVecino} en la Base de Datos
+                  </button>
+                </form>
+              )}
+            </main>
+          )}
+
+          {/* ================================================================= */}
+          {/* VISTA ADMINISTRADOR (PROTEGIDA CON PIN 1770)                      */}
+          {/* ================================================================= */}
+          {role === 'admin' && (
+            <main className="max-w-7xl mx-auto w-full px-4 py-6 space-y-6 flex-1">
+              {/* PESTAÑAS DEL PANEL DE ADMINISTRACIÓN */}
+              <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+                <button
+                  onClick={() => setAdminTab('dashboard')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    adminTab === 'dashboard' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  📊 Finanzas y Resumen
+                </button>
+                <button
+                  onClick={() => setAdminTab('dptos')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    adminTab === 'dptos' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  🏢 Base de Datos 96 Dptos (6 Torres)
+                </button>
+                <button
+                  onClick={() => setAdminTab('solicitudes')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    adminTab === 'solicitudes' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  💬 Solicitudes y WhatsApp ({solicitudes.filter((s) => s.estado === 'Pendiente').length})
+                </button>
+                <button
+                  onClick={() => setAdminTab('egresos')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    adminTab === 'egresos' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  🧾 Egresos y Comunicados
+                </button>
+                <button
+                  onClick={() => setAdminTab('whatsapp')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    adminTab === 'whatsapp' ? 'bg-emerald-700 text-white shadow' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  }`}
+                >
+                  📲 Configuración WhatsApp
+                </button>
+                <button
+                  onClick={() => setAdminTab('supabase')}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                    adminTab === 'supabase' ? 'bg-amber-600 text-white shadow' : 'bg-amber-50 text-amber-800 border border-amber-200'
+                  }`}
+                >
+                  ⚡ Estado Supabase
+                </button>
+              </div>
+
+              {/* ADMIN TAB 1: DASHBOARD FINANCIERO */}
+              {adminTab === 'dashboard' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Total Recaudado Mes</span>
+                      <p className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCLP(stats.totalRecaudado)}</p>
+                      <p className="text-xs text-slate-500 mt-1">De {formatCLP(stats.totalFacturado)} facturados ({stats.porcentajeRecaudacion}%)</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Por Cobrar / Morosidad</span>
+                      <p className="text-2xl font-extrabold text-rose-600 mt-1">{formatCLP(stats.totalPorCobrar)}</p>
+                      <p className="text-xs text-slate-500 mt-1">{stats.pendientes} pendientes • {stats.morosos} morosos</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Total Egresos Mes</span>
+                      <p className="text-2xl font-extrabold text-slate-900 mt-1">{formatCLP(stats.totalEgresos)}</p>
+                      <p className="text-xs text-slate-500 mt-1">Saldo Caja Operacional: {formatCLP(stats.saldoCaja)}</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Vecinos con WhatsApp</span>
+                      <p className="text-2xl font-extrabold text-indigo-600 mt-1">{stats.empadronados} / 96 Dptos</p>
+                      <p className="text-xs text-slate-500 mt-1">{96 - stats.empadronados} departamentos por empadronar</p>
+                    </div>
+                  </div>
+
+                  {/* Resumen por cada una de las 6 Torres */}
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-900 text-base mb-4">
+                      🏢 Estado Financiero por Torre (Torres A, B, C, D, E y F)
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                      {TORRES.map((t) => {
+                        const dptosTorre = departamentos.filter((d) => d.torre === t);
+                        const alDiaTorre = dptosTorre.filter((d) => d.estado === 'Al día').length;
+                        const deudaTorre = dptosTorre.reduce((acc, d) => acc + calcularTotalDeuda(d), 0);
+                        return (
+                          <div key={t} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-slate-900 text-base">Torre {t}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                                16 Dptos
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600">Al día: <strong>{alDiaTorre}/16</strong></p>
+                            <p className="text-xs text-rose-600 font-semibold">Deuda: {formatCLP(deudaTorre)}</p>
+                            <button
+                              onClick={() => {
+                                setFiltroTorre(t);
+                                setAdminTab('dptos');
+                              }}
+                              className="w-full py-1.5 rounded-lg bg-white border border-slate-300 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+                            >
+                              Ver Torre {t}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ADMIN TAB 2: BASE DE DATOS EDITABLE DE LOS 96 DEPARTAMENTOS */}
+              {adminTab === 'dptos' && (
+                <div className="space-y-4">
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={filtroTorre}
+                        onChange={(e) => setFiltroTorre(e.target.value)}
+                        className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-slate-50"
+                      >
+                        <option value="TODAS">Todas las Torres (A-F)</option>
+                        {TORRES.map((t) => (
+                          <option key={t} value={t}>Torre {t} (16 Dptos)</option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filtroEstado}
+                        onChange={(e) => setFiltroEstado(e.target.value)}
+                        className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-slate-50"
+                      >
+                        <option value="TODOS">Todos los Estados</option>
+                        <option value="Al día">Al día</option>
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Moroso">Moroso</option>
+                        <option value="SIN_WHATSAPP">📲 Sin WhatsApp Registrado</option>
+                      </select>
+
+                      <input
+                        type="text"
+                        placeholder="Buscar ej: A11 o nombre..."
+                        value={busquedaDpto}
+                        onChange={(e) => setBusquedaDpto(e.target.value)}
+                        className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setVistaMapa(!vistaMapa)}
+                        className="px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold"
+                      >
+                        {vistaMapa ? '📋 Ver Solo Tabla' : '🏢 Mostrar Mapa Visual 6 Torres'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* MAPA VISUAL DE LAS 6 TORRES */}
+                  {vistaMapa && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {TORRES.filter((t) => filtroTorre === 'TODAS' || filtroTorre === t).map((torre) => (
+                        <div key={torre} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-extrabold text-slate-900 text-sm">
+                              🏢 Torre {torre} (Pisos 1 al 4)
+                            </h4>
+                            <span className="text-[11px] text-slate-400">Clic en un dpto para editar</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {[4, 3, 2, 1].map((piso) => (
+                              <div key={piso} className="grid grid-cols-5 gap-1.5 items-center">
+                                <span className="text-[11px] font-bold text-slate-400">Piso {piso}</span>
+                                {[1, 2, 3, 4].map((num) => {
+                                  const id = `${torre}${piso}${num}`;
+                                  const d = departamentos.find((item) => item.id === id);
+                                  if (!d) return null;
+                                  const color =
+                                    d.estado === 'Al día'
+                                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-900 hover:bg-emerald-500/25'
+                                      : d.estado === 'Pendiente'
+                                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-900 hover:bg-amber-500/25'
+                                      : 'bg-rose-500/15 border-rose-500/40 text-rose-900 hover:bg-rose-500/25';
+                                  return (
+                                    <button
+                                      key={id}
+                                      onClick={() => setEditingDpto({ ...d })}
+                                      className={`py-1.5 px-1 rounded-lg border text-xs font-extrabold transition flex flex-col items-center ${color}`}
+                                    >
+                                      <span>{id}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* TABLA DETALLADA DE DEPARTAMENTOS */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 uppercase border-b border-slate-200">
+                          <th className="py-3 px-4">Dpto</th>
+                          <th className="py-3 px-4">Residente / WhatsApp</th>
+                          <th className="py-3 px-4">Gasto Base</th>
+                          <th className="py-3 px-4">Agua/Calef.</th>
+                          <th className="py-3 px-4">Deuda Total</th>
+                          <th className="py-3 px-4">Estado</th>
+                          <th className="py-3 px-4 text-right">Acciones Admin</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {dptosFiltrados.map((d) => {
+                          const deuda = calcularTotalDeuda(d);
+                          return (
+                            <tr key={d.id} className="hover:bg-slate-50">
+                              <td className="py-3 px-4 font-extrabold text-slate-900">{d.id}</td>
+                              <td className="py-3 px-4">
+                                <p className="font-semibold text-slate-800">{d.residente}</p>
+                                <p className="text-[11px] text-slate-400">
+                                  {d.telefono ? `📲 ${d.telefono}` : '⚠️ Sin WhatsApp'}
+                                </p>
+                              </td>
+                              <td className="py-3 px-4">{formatCLP(d.gasto_base)}</td>
+                              <td className="py-3 px-4">{formatCLP(d.agua_caliente)}</td>
+                              <td className="py-3 px-4 font-bold text-slate-900">{formatCLP(deuda)}</td>
+                              <td className="py-3 px-4">
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                                    d.estado === 'Al día'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : d.estado === 'Pendiente'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                  }`}
+                                >
+                                  {d.estado}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right space-x-1.5">
+                                <button
+                                  onClick={() => setEditingDpto({ ...d })}
+                                  className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100"
+                                >
+                                  ✏️ Editar
+                                </button>
+                                {deuda > 0 && (
+                                  <button
+                                    onClick={() => conciliarPagoTotal(d)}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold hover:bg-emerald-100"
+                                  >
+                                    ✅ Conciliar
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() =>
+                                    abrirModalWhatsApp(
+                                      d.id,
+                                      d.residente,
+                                      d.telefono,
+                                      'Estado de Gasto Común',
+                                      `Le informamos el resumen de su unidad *Dpto ${d.id}*:\n• Total Facturado Mes: ${formatCLP(calcularTotalFacturado(d))}\n• Saldo Pendiente a Pagar: *${formatCLP(deuda)}*\n• Estado: *${d.estado}*`
+                                    )
+                                  }
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500"
+                                >
+                                  📲 WhatsApp
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ADMIN TAB 3: BANDEJA DE SOLICITUDES Y RESPUESTA POR WHATSAPP */}
+              {adminTab === 'solicitudes' && (
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="font-bold text-slate-900 text-lg">
+                    💬 Solicitudes de Vecinos y Respuesta por WhatsApp / Web
+                  </h3>
+                  <div className="space-y-3">
+                    {solicitudes.map((s) => (
+                      <div key={s.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-1 max-w-2xl">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded bg-indigo-600 text-white font-extrabold text-xs">
+                              Dpto {s.dpto}
+                            </span>
+                            <span className="text-xs font-bold text-slate-700">{s.vecino}</span>
+                            <span className="text-xs text-slate-400">• {s.fecha}</span>
+                            <span
+                              className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                                s.estado === 'Resuelto' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {s.estado}
+                            </span>
+                          </div>
+                          <p className="font-bold text-slate-900 text-sm">{s.asunto} ({s.tipo})</p>
+                          <p className="text-xs text-slate-600">{s.mensaje}</p>
+                          {s.respuesta && (
+                            <p className="text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200 mt-1">
+                              <strong>Respuesta enviada:</strong> {s.respuesta}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setRespondingSolicitud(s);
+                            setRespuestaTexto(s.respuesta || '');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow"
+                        >
+                          Responder y Notificar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ADMIN TAB 4: EGRESOS Y COMUNICADOS */}
+              {adminTab === 'egresos' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+                    <h3 className="font-bold text-slate-900 text-base">➕ Registrar Nuevo Egreso / Factura del Condominio</h3>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!nuevoEgreso.categoria || !nuevoEgreso.monto) return;
+                        const item = {
+                          id: `EGR-${egresos.length + 1}`,
+                          categoria: nuevoEgreso.categoria,
+                          proveedor: nuevoEgreso.proveedor || 'Proveedor Condominio',
+                          monto: Number(nuevoEgreso.monto),
+                          fecha: new Date().toLocaleDateString('es-CL'),
+                          estado: 'Pagado'
+                        };
+                        setEgresos([item, ...egresos]);
+                        setNuevoEgreso({ categoria: '', proveedor: '', monto: '' });
+                        showToast('Egreso agregado al Dashboard de Transparencia');
+                      }}
+                      className="space-y-3"
+                    >
+                      <input
+                        type="text"
+                        placeholder="Categoría (Ej: Mantención Sala de Bombas)"
+                        value={nuevoEgreso.categoria}
+                        onChange={(e) => setNuevoEgreso({ ...nuevoEgreso, categoria: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Proveedor"
+                        value={nuevoEgreso.proveedor}
+                        onChange={(e) => setNuevoEgreso({ ...nuevoEgreso, proveedor: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Monto en CLP (Ej: 250000)"
+                        value={nuevoEgreso.monto}
+                        onChange={(e) => setNuevoEgreso({ ...nuevoEgreso, monto: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      />
+                      <button type="submit" className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold">
+                        Guardar Egreso
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+                    <h3 className="font-bold text-slate-900 text-base">📢 Publicar Comunicado Oficial a las 6 Torres</h3>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!nuevoComunicado.titulo || !nuevoComunicado.mensaje) return;
+                        const item = {
+                          id: `COM-${comunicados.length + 1}`,
+                          titulo: nuevoComunicado.titulo,
+                          prioridad: nuevoComunicado.prioridad,
+                          mensaje: nuevoComunicado.mensaje,
+                          fecha: new Date().toLocaleDateString('es-CL')
+                        };
+                        setComunicados([item, ...comunicados]);
+                        setNuevoComunicado({ titulo: '', prioridad: 'Media', mensaje: '' });
+                        showToast('Comunicado publicado en el portal de vecinos');
+                      }}
+                      className="space-y-3"
+                    >
+                      <input
+                        type="text"
+                        placeholder="Título del aviso"
+                        value={nuevoComunicado.titulo}
+                        onChange={(e) => setNuevoComunicado({ ...nuevoComunicado, titulo: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      />
+                      <textarea
+                        rows="3"
+                        placeholder="Mensaje para los residentes de El Pellín 1770..."
+                        value={nuevoComunicado.mensaje}
+                        onChange={(e) => setNuevoComunicado({ ...nuevoComunicado, mensaje: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      ></textarea>
+                      <button type="submit" className="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold">
+                        Publicar Aviso Oficial
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* ADMIN TAB 5: CONFIGURACIÓN WHATSAPP DE PRUEBA / REAL */}
+              {adminTab === 'whatsapp' && (
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm max-w-2xl space-y-4">
+                  <h3 className="font-bold text-slate-900 text-lg">
+                    📲 Configuración de Notificaciones WhatsApp (Modo Prueba / Producción)
+                  </h3>
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <div>
+                      <p className="font-bold text-emerald-950 text-sm">Activar Modo Prueba de WhatsApp</p>
+                      <p className="text-xs text-emerald-800">
+                        Si está activo, todos los mensajes se enviarán a tu número de prueba para verificar antes de enviar a los vecinos reales.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={whatsappConfig.modoPrueba}
+                      onChange={(e) => setWhatsappConfig({ ...whatsappConfig, modoPrueba: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Número de WhatsApp de Prueba / Administración
+                    </label>
+                    <input
+                      type="text"
+                      value={whatsappConfig.numeroPrueba}
+                      onChange={(e) => setWhatsappConfig({ ...whatsappConfig, numeroPrueba: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ADMIN TAB 6: CONEXIÓN SUPABASE YA FIJA EN EL CÓDIGO */}
+              {adminTab === 'supabase' && (
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm max-w-2xl space-y-4">
+                  <h3 className="font-bold text-slate-900 text-lg">
+                    ⚡ Conexión Fija a tu Base de Datos Supabase
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Tus credenciales de Supabase ya vienen incrustadas por defecto en este archivo <code>index.html</code>.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">1. SUPABASE_URL</label>
+                      <input
+                        type="text"
+                        value={supabaseUrl}
+                        onChange={(e) => setSupabaseUrl(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">2. SUPABASE_KEY</label>
+                      <input
+                        type="password"
+                        value={supabaseKey}
+                        onChange={(e) => setSupabaseKey(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <button
+                        onClick={() => cargarDesdeSupabase(false)}
+                        disabled={isSyncing}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
+                      >
+                        🔄 Probar Conexión y Leer desde Supabase
+                      </button>
+                      <button
+                        onClick={sincronizar96DptosASupabase}
+                        disabled={isSyncing}
+                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                      >
+                        ☁️ Subir / Sincronizar los 96 Dptos a Supabase
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+          )}
+
+          {/* MODAL PIN ADMINISTRADOR */}
+          {showPinModal && (
+            <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handlePinSubmit} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+                <h3 className="font-extrabold text-slate-900 text-lg">🔒 Acceso Administración</h3>
+                <p className="text-xs text-slate-500">
+                  Ingresa el PIN de seguridad del Condominio Portal de Lampa para desbloquear la edición de los 96 departamentos.
+                </p>
+                <input
+                  type="password"
+                  autoFocus
+                  placeholder="Ingresa PIN (1770)"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-center text-lg font-extrabold tracking-widest"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPinModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold"
+                  >
+                    Entrar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* MODAL EDITAR DEPARTAMENTO (ADMIN) */}
+          {editingDpto && (
+            <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSaveDpto} className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-extrabold text-slate-900 text-lg">
+                    ✏️ Editar Departamento {editingDpto.id}
+                  </h3>
+                  <button type="button" onClick={() => setEditingDpto(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700">Nombre Residente</label>
+                    <input
+                      type="text"
+                      value={editingDpto.residente}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, residente: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Teléfono WhatsApp</label>
+                    <input
+                      type="text"
+                      value={editingDpto.telefono}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, telefono: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Estado de Pago</label>
+                    <select
+                      value={editingDpto.estado}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, estado: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    >
+                      <option>Al día</option>
+                      <option>Pendiente</option>
+                      <option>Moroso</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Gasto Común Base ($)</label>
+                    <input
+                      type="number"
+                      value={editingDpto.gasto_base}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, gasto_base: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Agua / Calefacción ($)</label>
+                    <input
+                      type="number"
+                      value={editingDpto.agua_caliente}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, agua_caliente: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Multas ($)</label>
+                    <input
+                      type="number"
+                      value={editingDpto.multas}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, multas: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Monto Abonado / Pagado ($)</label>
+                    <input
+                      type="number"
+                      value={editingDpto.pagado}
+                      onChange={(e) => setEditingDpto({ ...editingDpto, pagado: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-3 border-t">
+                  <button type="button" onClick={() => setEditingDpto(null)} className="px-4 py-2 rounded-xl bg-slate-100 text-xs font-bold">
+                    Cancelar
+                  </button>
+                  <button type="submit" className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold">
+                    Guardar y Sincronizar en Supabase
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* MODAL RESPONDER SOLICITUD (ADMIN) */}
+          {respondingSolicitud && (
+            <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+                <h3 className="font-extrabold text-slate-900 text-lg">
+                  Responder a Dpto {respondingSolicitud.dpto} ({respondingSolicitud.vecino})
+                </h3>
+                <p className="text-xs text-slate-600 bg-slate-100 p-3 rounded-xl">
+                  <strong>Consulta:</strong> {respondingSolicitud.mensaje}
+                </p>
+                <textarea
+                  rows="4"
+                  placeholder="Escribe la respuesta oficial de la Administración..."
+                  value={respuestaTexto}
+                  onChange={(e) => setRespuestaTexto(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
+                ></textarea>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    onClick={() => setRespondingSolicitud(null)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => guardarRespuestaSolicitud(false)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold"
+                  >
+                    Guardar en Portal Web
+                  </button>
+                  <button
+                    onClick={() => guardarRespuestaSolicitud(true)}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"
+                  >
+                    📲 Responder y Enviar por WhatsApp
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL VISTA PREVIA DE ENVÍO WHATSAPP */}
+          {waPreviewModal && (
+            <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                <h3 className="font-extrabold text-slate-900 text-lg">📲 Notificación Lista para WhatsApp</h3>
+                <div className="text-xs space-y-1 bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-emerald-900">
+                  <p><strong>Unidad:</strong> Dpto {waPreviewModal.dptoId} ({waPreviewModal.nombreVecino})</p>
+                  <p><strong>Teléfono enviando a:</strong> {waPreviewModal.numeroEnvio} {waPreviewModal.modoPrueba ? '(Modo Prueba Activo)' : '(Número Real)'}</p>
+                </div>
+                <pre className="text-xs bg-slate-100 p-3.5 rounded-xl whitespace-pre-wrap font-sans text-slate-800 border border-slate-200">
+                  {waPreviewModal.mensajeCompleto}
+                </pre>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setWaPreviewModal(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+                  >
+                    Cerrar
+                  </button>
+                  <a
+                    href={waPreviewModal.urlWa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setWaPreviewModal(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold text-center"
+                  >
+                    Abrir WhatsApp y Enviar
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
