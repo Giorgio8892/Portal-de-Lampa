@@ -9,10 +9,8 @@
   <!-- React & ReactDOM CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel para compilar JSX directamente en el navegador (ideal para GitHub Pages) -->
+  <!-- Babel para compilar JSX directamente en el navegador -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     body { font-family: 'Inter', sans-serif; }
@@ -25,11 +23,16 @@
     const { useState, useEffect, useMemo } = React;
 
     // ============================================================================
-    // CREDENCIALES FIJAS DE SUPABASE (CONDOMINIO PORTAL DE LAMPA)
+    // CONFIGURACIÓN INTERNA FIJA (BLINDADA Y OCULTA EN PANTALLA)
     // ============================================================================
-    const DEFAULT_SUPABASE_URL = "https://ewksfaamizxugjxhxyiu.supabase.co";
-    const DEFAULT_SUPABASE_KEY = "sb_publishable_Z-79MDbqVfis18UYIkh53Q_lz5-N0Ok";
-    const DEFAULT_ADMIN_PIN = "admin1010";
+    const SUPABASE_URL = "https://ewksfaamizxugjxhxyiu.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_Z-79MDbqVfis18UYIkh53Q_lz5-N0Ok";
+    const DEFAULT_ADMIN_PIN = "1770";
+
+    // PUEDES CAMBIAR AQUÍ EL MONTO INICIAL POR DEFECTO SI LO DESEAS:
+    const GASTO_COMUN_BASE_DEFECTO = 25000;
+    const AGUA_CALIENTE_DEFECTO = 0;
+    const FONDO_RESERVA_DEFECTO = 1250;
 
     const TORRES = ['A', 'B', 'C', 'D', 'E', 'F'];
     const PISOS = [1, 2, 3, 4];
@@ -41,6 +44,7 @@
         PISOS.forEach((piso) => {
           DPTOS_POR_PISO.forEach((num) => {
             const id = `${torre}${piso}${num}`;
+            const totalInicial = GASTO_COMUN_BASE_DEFECTO + AGUA_CALIENTE_DEFECTO + FONDO_RESERVA_DEFECTO;
             lista.push({
               id,
               torre,
@@ -53,12 +57,12 @@
               email: '',
               registro_verificado: false,
               estado: 'Al día',
-              gasto_base: 68000,
-              agua_caliente: 12000,
-              fondo_reserva: 3400,
+              gasto_base: GASTO_COMUN_BASE_DEFECTO,
+              agua_caliente: AGUA_CALIENTE_DEFECTO,
+              fondo_reserva: FONDO_RESERVA_DEFECTO,
               multas: 0,
               saldo_anterior: 0,
-              pagado: 83400,
+              pagado: totalInicial,
               ultima_actualizacion: '15/11/2026'
             });
           });
@@ -68,11 +72,10 @@
     };
 
     const EGRESOS_INICIALES = [
-      { id: 'EGR-01', categoria: 'Remuneraciones Conserjería y Aseo', proveedor: 'Personal de Planta (6 Turnos)', monto: 3850000, fecha: '05/11/2026', estado: 'Pagado' },
-      { id: 'EGR-02', categoria: 'Electricidad Espacios Comunes y Bombas', proveedor: 'Enel Distribución', monto: 980000, fecha: '08/11/2026', estado: 'Pagado' },
-      { id: 'EGR-03', categoria: 'Agua Potable y Riego Áreas Verdes', proveedor: 'Aguas Andinas / Red Lampa', monto: 720000, fecha: '10/11/2026', estado: 'Pagado' },
-      { id: 'EGR-04', categoria: 'Mantención Portón Eléctrico y Citofonía', proveedor: 'Seguridad Industrial SpA', monto: 420000, fecha: '12/11/2026', estado: 'Pagado' },
-      { id: 'EGR-05', categoria: 'Insumos de Aseo y Mantención Jardines', proveedor: 'Comercial Lampa Verde', monto: 310000, fecha: '14/11/2026', estado: 'Pagado' }
+      { id: 'EGR-01', categoria: 'Remuneraciones Conserjería y Aseo', proveedor: 'Personal de Planta', monto: 1250000, fecha: '05/11/2026', estado: 'Pagado' },
+      { id: 'EGR-02', categoria: 'Electricidad Espacios Comunes y Bombas', proveedor: 'Enel Distribución', monto: 480000, fecha: '08/11/2026', estado: 'Pagado' },
+      { id: 'EGR-03', categoria: 'Agua Potable y Riego Áreas Verdes', proveedor: 'Red Lampa', monto: 310000, fecha: '10/11/2026', estado: 'Pagado' },
+      { id: 'EGR-04', categoria: 'Mantención Portón Eléctrico y Citofonía', proveedor: 'Seguridad SpA', monto: 185000, fecha: '12/11/2026', estado: 'Pagado' }
     ];
 
     const COMUNICADOS_INICIALES = [
@@ -82,13 +85,6 @@
         fecha: '15/11/2026',
         prioridad: 'Alta',
         mensaje: 'Vecinos de El Pellín 1770: Ya se encuentra habilitado nuestro portal digital para las 6 torres (A a F). Por favor ingresen a la pestaña "Registrar mi WhatsApp / Mis Datos" para recibir sus colillas y avisos directamente en su teléfono.'
-      },
-      {
-        id: 'COM-02',
-        titulo: 'Mantención Preventiva Sala de Bombas Hidropack',
-        fecha: '14/11/2026',
-        prioridad: 'Media',
-        mensaje: 'Este miércoles entre las 10:00 y 12:30 hrs se realizará inspección técnica programada en el sistema de impulsión de agua de las Torres A a la F.'
       }
     ];
 
@@ -99,26 +95,70 @@
         vecino: 'Vecina Dpto A12',
         telefono: '',
         tipo: 'Detalle de Consumo / Gasto Común',
-        asunto: 'Consulta lectura de agua caliente mes actual',
-        mensaje: 'Hola Administración, quisiera solicitar el desglose de mi consumo de este mes y saber cómo recibo el comprobante.',
+        asunto: 'Consulta desglose de gasto común mes actual',
+        mensaje: 'Hola Administración, quisiera solicitar el desglose de mi gasto común de este mes.',
         fecha: '15/11/2026',
         estado: 'Pendiente',
         respuesta: ''
       }
     ];
 
+    // Formateador de moneda CLP ($15.000)
     const formatCLP = (valor) => {
       const num = Number(valor) || 0;
       return '$' + num.toLocaleString('es-CL');
     };
 
-    const calcularTotalDeuda = (d) => {
-      const totalMes = (Number(d.gasto_base) || 0) + (Number(d.agua_caliente) || 0) + (Number(d.fondo_reserva) || 0) + (Number(d.multas) || 0) + (Number(d.saldo_anterior) || 0);
-      return Math.max(0, totalMes - (Number(d.pagado) || 0));
+    // Formateador de input numérico con puntos de miles (15.000) y vacío limpio cuando se borra
+    const formatMilesInput = (valor) => {
+      if (valor === '' || valor === null || valor === undefined) return '';
+      const limpio = String(valor).replace(/\D/g, '');
+      if (limpio === '') return '';
+      return Number(limpio).toLocaleString('es-CL');
     };
+
+    const parseMilesInput = (texto) => {
+      const limpio = String(texto).replace(/\D/g, '');
+      return limpio === '' ? '' : Number(limpio);
+    };
+
+    // Componente de Input de Dinero sin "0" pegado y con puntos automáticos
+    function MoneyInput({ value, onChange, placeholder = "0", className = "" }) {
+      const displayValue = value === '' ? '' : formatMilesInput(value);
+
+      const handleChange = (e) => {
+        const raw = e.target.value;
+        const soloDigitos = raw.replace(/\D/g, '');
+        if (soloDigitos === '') {
+          onChange('');
+        } else {
+          // Elimina ceros a la izquierda ("011" -> 11)
+          onChange(Number(soloDigitos));
+        }
+      };
+
+      return (
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder={placeholder}
+            value={displayValue}
+            onChange={handleChange}
+            className={`w-full pl-7 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${className}`}
+          />
+        </div>
+      );
+    }
 
     const calcularTotalFacturado = (d) => {
       return (Number(d.gasto_base) || 0) + (Number(d.agua_caliente) || 0) + (Number(d.fondo_reserva) || 0) + (Number(d.multas) || 0) + (Number(d.saldo_anterior) || 0);
+    };
+
+    const calcularTotalDeuda = (d) => {
+      const totalMes = calcularTotalFacturado(d);
+      return Math.max(0, totalMes - (Number(d.pagado) || 0));
     };
 
     function App() {
@@ -126,7 +166,6 @@
       const [role, setRole] = useState('habitante');
       const [showPinModal, setShowPinModal] = useState(false);
       const [pinInput, setPinInput] = useState('');
-      const [adminPin, setAdminPin] = useState(DEFAULT_ADMIN_PIN);
 
       // Pestañas
       const [adminTab, setAdminTab] = useState('dashboard');
@@ -142,10 +181,8 @@
       const [comunicados, setComunicados] = useState(COMUNICADOS_INICIALES);
       const [solicitudes, setSolicitudes] = useState(SOLICITUDES_INICIALES);
 
-      // Estado de conexión Supabase
-      const [supabaseUrl, setSupabaseUrl] = useState(DEFAULT_SUPABASE_URL);
-      const [supabaseKey, setSupabaseKey] = useState(DEFAULT_SUPABASE_KEY);
-      const [syncStatus, setSyncStatus] = useState('Conectando a Supabase...');
+      // Estado de sincronización silenciosa con Supabase
+      const [syncStatus, setSyncStatus] = useState('Conectando...');
       const [isSyncing, setIsSyncing] = useState(false);
       const [toastMsg, setToastMsg] = useState(null);
 
@@ -163,7 +200,13 @@
       const [busquedaDpto, setBusquedaDpto] = useState('');
       const [vistaMapa, setVistaMapa] = useState(true);
 
-      // Modal Edición de Departamento (Admin)
+      // Estado para Edición Masiva de Gasto Común (96 Dptos o por Torre)
+      const [masivoTorre, setMasivoTorre] = useState('TODAS');
+      const [masivoGastoBase, setMasivoGastoBase] = useState(GASTO_COMUN_BASE_DEFECTO);
+      const [masivoFondoReserva, setMasivoFondoReserva] = useState(FONDO_RESERVA_DEFECTO);
+      const [masivoMarcarEstado, setMasivoMarcarEstado] = useState('MANTENER');
+
+      // Modal Edición Individual de Departamento (Admin)
       const [editingDpto, setEditingDpto] = useState(null);
 
       // Modal Respuesta Solicitud (Admin)
@@ -174,7 +217,7 @@
       const [nuevoEgreso, setNuevoEgreso] = useState({ categoria: '', proveedor: '', monto: '' });
       const [nuevoComunicado, setNuevoComunicado] = useState({ titulo: '', prioridad: 'Media', mensaje: '' });
 
-      // Formularios del Vecino (Auto-registro y Nueva Solicitud)
+      // Formularios del Vecino
       const [formRegistroVecino, setFormRegistroVecino] = useState({
         residente: '',
         rut: '',
@@ -195,62 +238,54 @@
       };
 
       // ========================================================================
-      // CONEXIÓN REST CON SUPABASE
+      // CONEXIÓN INTERNA A SUPABASE (SIN EXPONER CLAVES EN LA INTERFAZ)
       // ========================================================================
       const getSupabaseHeaders = () => ({
-        'apikey': supabaseKey.trim(),
-        'Authorization': `Bearer ${supabaseKey.trim()}`,
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=representation,resolution=merge-duplicates'
       });
 
-      const cargarDesdeSupabase = async (silencioso = false) => {
-        const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
-        if (!cleanUrl || !supabaseKey) return;
+      const cargarDesdeSupabase = async (silencioso = true) => {
         setIsSyncing(true);
         try {
-          const resDptos = await fetch(`${cleanUrl}/rest/v1/departamentos?select=*&order=id.asc`, {
+          const resDptos = await fetch(`${SUPABASE_URL}/rest/v1/departamentos?select=*&order=id.asc`, {
             headers: getSupabaseHeaders()
           });
           if (resDptos.ok) {
             const data = await resDptos.json();
             if (Array.isArray(data) && data.length > 0) {
               setDepartamentos(data);
-              setSyncStatus(`Conectado en línea (${data.length} dptos en Supabase)`);
-              if (!silencioso) showToast(`Sincronizado: ${data.length} departamentos cargados desde Supabase`);
-            } else {
-              setSyncStatus('Conectado a Supabase (Tabla vacía, usando base local)');
+              setSyncStatus(`En línea (${data.length} dptos)`);
+              if (!silencioso) showToast(`Base de datos sincronizada (${data.length} dptos)`);
             }
-          } else {
-            setSyncStatus('Modo Local Activo (Verifica políticas RLS en Supabase)');
           }
 
-          // Intentar cargar solicitudes, egresos y comunicados si existen
-          const resSol = await fetch(`${cleanUrl}/rest/v1/solicitudes?select=*&order=id.desc`, { headers: getSupabaseHeaders() });
+          const resSol = await fetch(`${SUPABASE_URL}/rest/v1/solicitudes?select=*&order=id.desc`, { headers: getSupabaseHeaders() });
           if (resSol.ok) {
             const dataSol = await resSol.json();
             if (Array.isArray(dataSol) && dataSol.length > 0) setSolicitudes(dataSol);
           }
 
-          const resCom = await fetch(`${cleanUrl}/rest/v1/comunicados?select=*&order=id.desc`, { headers: getSupabaseHeaders() });
+          const resCom = await fetch(`${SUPABASE_URL}/rest/v1/comunicados?select=*&order=id.desc`, { headers: getSupabaseHeaders() });
           if (resCom.ok) {
             const dataCom = await resCom.json();
             if (Array.isArray(dataCom) && dataCom.length > 0) setComunicados(dataCom);
           }
         } catch (err) {
-          setSyncStatus('Operando en memoria local');
+          setSyncStatus('Modo Local');
         } finally {
           setIsSyncing(false);
         }
       };
 
-      const guardarDptoEnSupabase = async (dptoActualizado) => {
-        const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
+      const guardarDptoEnSupabase = async (payload) => {
         try {
-          const res = await fetch(`${cleanUrl}/rest/v1/departamentos`, {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/departamentos`, {
             method: 'POST',
             headers: getSupabaseHeaders(),
-            body: JSON.stringify(dptoActualizado)
+            body: JSON.stringify(payload)
           });
           return res.ok;
         } catch (e) {
@@ -258,37 +293,16 @@
         }
       };
 
-      const sincronizar96DptosASupabase = async () => {
-        const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
-        setIsSyncing(true);
-        try {
-          const res = await fetch(`${cleanUrl}/rest/v1/departamentos`, {
-            method: 'POST',
-            headers: getSupabaseHeaders(),
-            body: JSON.stringify(departamentos)
-          });
-          if (res.ok) {
-            setSyncStatus('¡96 Departamentos sincronizados en Supabase!');
-            showToast('¡Los 96 departamentos quedaron guardados en tu Supabase!');
-          } else {
-            showToast('Error al subir a Supabase. Verifica la tabla departamentos.');
-          }
-        } catch (err) {
-          showToast('Error de red al conectar con Supabase.');
-        } finally {
-          setIsSyncing(false);
-        }
-      };
-
       useEffect(() => {
         cargarDesdeSupabase(true);
       }, []);
 
-      // Sincronizar datos del formulario de auto-registro cuando el vecino cambia de dpto
+      // Departamento seleccionado actualmente en la Vista Vecino
       const dptoVecinoActual = useMemo(() => {
         return departamentos.find((d) => d.id === selectedDptoVecino) || departamentos[0];
       }, [departamentos, selectedDptoVecino]);
 
+      // Solo recarga el formulario del vecino cuando cambia el ID de departamento (evita lag al escribir)
       useEffect(() => {
         if (dptoVecinoActual) {
           setFormRegistroVecino({
@@ -303,7 +317,7 @@
             telefonoContacto: dptoVecinoActual.telefono || '+569'
           }));
         }
-      }, [dptoVecinoActual]);
+      }, [selectedDptoVecino]);
 
       // Estadísticas Globales Financieras
       const stats = useMemo(() => {
@@ -391,16 +405,26 @@
         });
       };
 
-      // Guardar edición de un departamento (Modo Admin)
+      // Guardar edición individual de un departamento (Modo Admin)
       const handleSaveDpto = async (e) => {
         e.preventDefault();
         if (!editingDpto) return;
 
-        const deuda = calcularTotalDeuda(editingDpto);
-        const estadoCalculado = deuda === 0 ? 'Al día' : editingDpto.estado === 'Al día' ? 'Pendiente' : editingDpto.estado;
+        const dptoNormalizado = {
+          ...editingDpto,
+          gasto_base: Number(editingDpto.gasto_base) || 0,
+          agua_caliente: Number(editingDpto.agua_caliente) || 0,
+          fondo_reserva: Number(editingDpto.fondo_reserva) || 0,
+          multas: Number(editingDpto.multas) || 0,
+          saldo_anterior: Number(editingDpto.saldo_anterior) || 0,
+          pagado: Number(editingDpto.pagado) || 0
+        };
+
+        const deuda = calcularTotalDeuda(dptoNormalizado);
+        const estadoCalculado = deuda === 0 ? 'Al día' : dptoNormalizado.estado === 'Al día' ? 'Pendiente' : dptoNormalizado.estado;
 
         const actualizado = {
-          ...editingDpto,
+          ...dptoNormalizado,
           estado: estadoCalculado,
           ultima_actualizacion: new Date().toLocaleDateString('es-CL')
         };
@@ -408,7 +432,58 @@
         setDepartamentos((prev) => prev.map((d) => (d.id === actualizado.id ? actualizado : d)));
         setEditingDpto(null);
         await guardarDptoEnSupabase(actualizado);
-        showToast(`Departamento ${actualizado.id} actualizado en la base de datos`);
+        showToast(`Departamento ${actualizado.id} guardado y sincronizado`);
+      };
+
+      // APLICAR CAMBIO MASIVO DE GASTO COMÚN A LOS 96 DPTOS O A UNA TORRE
+      const handleAplicarCambioMasivo = async (e) => {
+        e.preventDefault();
+        const nuevoBase = Number(masivoGastoBase) || 0;
+        const nuevoReserva = Number(masivoFondoReserva) || 0;
+        const fechaHoy = new Date().toLocaleDateString('es-CL');
+
+        const listaActualizada = [];
+        const nuevosDptos = departamentos.map((d) => {
+          if (masivoTorre !== 'TODAS' && d.torre !== masivoTorre) return d;
+
+          const totalNuevo = nuevoBase + (Number(d.agua_caliente) || 0) + nuevoReserva + (Number(d.multas) || 0) + (Number(d.saldo_anterior) || 0);
+          let nuevoPagado = Number(d.pagado) || 0;
+          let nuevoEstado = d.estado;
+
+          if (masivoMarcarEstado === 'PENDIENTE_CERO') {
+            nuevoPagado = 0;
+            nuevoEstado = 'Pendiente';
+          } else if (masivoMarcarEstado === 'AL_DIA_PAGADO') {
+            nuevoPagado = totalNuevo;
+            nuevoEstado = 'Al día';
+          } else {
+            // Ajusta si lo abonado era igual al total anterior
+            nuevoEstado = Math.max(0, totalNuevo - nuevoPagado) === 0 ? 'Al día' : 'Pendiente';
+          }
+
+          const itemModificado = {
+            ...d,
+            gasto_base: nuevoBase,
+            fondo_reserva: nuevoReserva,
+            pagado: nuevoPagado,
+            estado: nuevoEstado,
+            ultima_actualizacion: fechaHoy
+          };
+          listaActualizada.push(itemModificado);
+          return itemModificado;
+        });
+
+        setDepartamentos(nuevosDptos);
+        setIsSyncing(true);
+        const ok = await guardarDptoEnSupabase(listaActualizada);
+        setIsSyncing(false);
+
+        const alcanceTexto = masivoTorre === 'TODAS' ? 'los 96 departamentos' : `los 16 departamentos de la Torre ${masivoTorre}`;
+        if (ok) {
+          showToast(`¡Gasto común de ${formatCLP(nuevoBase)} aplicado en Supabase a ${alcanceTexto}!`);
+        } else {
+          showToast(`Gasto común actualizado localmente en ${alcanceTexto}`);
+        }
       };
 
       // Conciliar Pago Rápido en 1 Clic (Modo Admin)
@@ -473,17 +548,14 @@
 
         setSolicitudes((prev) => [nueva, ...prev]);
 
-        // Si el vecino anotó su WhatsApp en la solicitud, actualizamos su ficha automáticamente
         if (telIngresado && telIngresado.length >= 8 && telIngresado !== dptoVecinoActual.telefono) {
           const dptoUpd = { ...dptoVecinoActual, telefono: telIngresado, registro_verificado: true };
           setDepartamentos((prev) => prev.map((d) => (d.id === dptoUpd.id ? dptoUpd : d)));
           await guardarDptoEnSupabase(dptoUpd);
         }
 
-        // Guardar en tabla solicitudes de Supabase si está disponible
         try {
-          const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
-          await fetch(`${cleanUrl}/rest/v1/solicitudes`, {
+          await fetch(`${SUPABASE_URL}/rest/v1/solicitudes`, {
             method: 'POST',
             headers: getSupabaseHeaders(),
             body: JSON.stringify(nueva)
@@ -506,8 +578,7 @@
         setSolicitudes((prev) => prev.map((s) => (s.id === actualizada.id ? actualizada : s)));
 
         try {
-          const cleanUrl = supabaseUrl.trim().replace(/\/$/, '');
-          await fetch(`${cleanUrl}/rest/v1/solicitudes`, {
+          await fetch(`${SUPABASE_URL}/rest/v1/solicitudes`, {
             method: 'POST',
             headers: getSupabaseHeaders(),
             body: JSON.stringify(actualizada)
@@ -532,16 +603,16 @@
         }
       };
 
-      // Verificar PIN para pasar a Modo Administrador
+      // Verificar PIN para pasar a Modo Administrador (sin revelar pista en pantalla)
       const handlePinSubmit = (e) => {
         e.preventDefault();
-        if (pinInput === adminPin) {
+        if (pinInput === DEFAULT_ADMIN_PIN) {
           setRole('admin');
           setShowPinModal(false);
           setPinInput('');
           showToast('Modo Administrador desbloqueado');
         } else {
-          showToast('PIN incorrecto');
+          showToast('Clave de Administración incorrecta');
         }
       };
 
@@ -552,7 +623,7 @@
         <div className="min-h-screen flex flex-col bg-slate-50">
           {/* NOTIFICACIÓN FLOTANTE (TOAST) */}
           {toastMsg && (
-            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-bounce">
+            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
               <span className="text-sm font-medium">{toastMsg}</span>
             </div>
@@ -856,7 +927,6 @@
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Rendición de gastos comunes */}
                     <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                       <h3 className="font-bold text-slate-900 text-base mb-3">
                         🧾 Rendición Transparente de Egresos del Mes
@@ -874,7 +944,6 @@
                       </div>
                     </div>
 
-                    {/* Mural de Comunicados */}
                     <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                       <h3 className="font-bold text-slate-900 text-base mb-3">
                         📢 Mural Oficial de Comunicados (El Pellín 1770)
@@ -966,7 +1035,6 @@
                     </button>
                   </form>
 
-                  {/* Historial de Solicitudes y Respuestas del Departamento */}
                   <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
                     <h3 className="font-bold text-slate-900 text-lg">
                       🔔 Historial y Respuestas del Dpto {selectedDptoVecino}
@@ -1017,7 +1085,7 @@
                       📲 Registrar WhatsApp y Datos del Departamento {selectedDptoVecino}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      Al guardar este formulario, tus datos quedan actualizados inmediatamente en la base de datos de la Administración para enviarte avisos y respuestas por WhatsApp.
+                      Al guardar este formulario, tus datos quedan actualizados inmediatamente en la base de datos de la Administración.
                     </p>
                   </div>
 
@@ -1089,59 +1157,61 @@
           )}
 
           {/* ================================================================= */}
-          {/* VISTA ADMINISTRADOR (PROTEGIDA CON PIN 1770)                      */}
+          {/* VISTA ADMINISTRADOR (SIN PESTAÑA SUPABASE EXPUESTA)               */}
           {/* ================================================================= */}
           {role === 'admin' && (
             <main className="max-w-7xl mx-auto w-full px-4 py-6 space-y-6 flex-1">
               {/* PESTAÑAS DEL PANEL DE ADMINISTRACIÓN */}
-              <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setAdminTab('dashboard')}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                      adminTab === 'dashboard' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    📊 Finanzas y Resumen
+                  </button>
+                  <button
+                    onClick={() => setAdminTab('dptos')}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                      adminTab === 'dptos' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    🏢 Base de Datos 96 Dptos (6 Torres)
+                  </button>
+                  <button
+                    onClick={() => setAdminTab('solicitudes')}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                      adminTab === 'solicitudes' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    💬 Solicitudes y WhatsApp ({solicitudes.filter((s) => s.estado === 'Pendiente').length})
+                  </button>
+                  <button
+                    onClick={() => setAdminTab('egresos')}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                      adminTab === 'egresos' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    🧾 Egresos y Comunicados
+                  </button>
+                  <button
+                    onClick={() => setAdminTab('whatsapp')}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                      adminTab === 'whatsapp' ? 'bg-emerald-700 text-white shadow' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    📲 Configuración WhatsApp
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setAdminTab('dashboard')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
-                    adminTab === 'dashboard' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
-                  }`}
+                  onClick={() => cargarDesdeSupabase(false)}
+                  disabled={isSyncing}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
                 >
-                  📊 Finanzas y Resumen
-                </button>
-                <button
-                  onClick={() => setAdminTab('dptos')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
-                    adminTab === 'dptos' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  🏢 Base de Datos 96 Dptos (6 Torres)
-                </button>
-                <button
-                  onClick={() => setAdminTab('solicitudes')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
-                    adminTab === 'solicitudes' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  💬 Solicitudes y WhatsApp ({solicitudes.filter((s) => s.estado === 'Pendiente').length})
-                </button>
-                <button
-                  onClick={() => setAdminTab('egresos')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
-                    adminTab === 'egresos' ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  🧾 Egresos y Comunicados
-                </button>
-                <button
-                  onClick={() => setAdminTab('whatsapp')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
-                    adminTab === 'whatsapp' ? 'bg-emerald-700 text-white shadow' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  }`}
-                >
-                  📲 Configuración WhatsApp
-                </button>
-                <button
-                  onClick={() => setAdminTab('supabase')}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
-                    adminTab === 'supabase' ? 'bg-amber-600 text-white shadow' : 'bg-amber-50 text-amber-800 border border-amber-200'
-                  }`}
-                >
-                  ⚡ Estado Supabase
+                  🔄 Refrescar Datos Nube
                 </button>
               </div>
 
@@ -1208,9 +1278,84 @@
                 </div>
               )}
 
-              {/* ADMIN TAB 2: BASE DE DATOS EDITABLE DE LOS 96 DEPARTAMENTOS */}
+              {/* ADMIN TAB 2: BASE DE DATOS EDITABLE + ACTUALIZADOR MASIVO */}
               {adminTab === 'dptos' && (
                 <div className="space-y-4">
+                  {/* HERRAMIENTA DE EDICIÓN MASIVA DEL GASTO COMÚN */}
+                  <form
+                    onSubmit={handleAplicarCambioMasivo}
+                    className="bg-indigo-950 text-white p-5 rounded-2xl shadow-md border border-indigo-800 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300">
+                          ⚡ Edición Masiva en 1 Clic (Sincroniza directo en Supabase)
+                        </span>
+                        <h4 className="font-extrabold text-sm sm:text-base">
+                          Ajustar Gasto Común Base para los 96 Departamentos o por Torre
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end pt-1">
+                      <div>
+                        <label className="block text-[11px] font-bold text-indigo-200 mb-1">Aplicar a:</label>
+                        <select
+                          value={masivoTorre}
+                          onChange={(e) => setMasivoTorre(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-indigo-700 text-white text-xs font-bold"
+                        >
+                          <option value="TODAS">Todas las Torres (96 Dptos)</option>
+                          {TORRES.map((t) => (
+                            <option key={t} value={t}>Solo Torre {t} (16 Dptos)</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-indigo-200 mb-1">Nuevo Gasto Común Base ($)</label>
+                        <MoneyInput
+                          value={masivoGastoBase}
+                          onChange={(val) => setMasivoGastoBase(val)}
+                          placeholder="Ej: 15.000"
+                          className="bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-indigo-200 mb-1">Fondo Reserva ($)</label>
+                        <MoneyInput
+                          value={masivoFondoReserva}
+                          onChange={(val) => setMasivoFondoReserva(val)}
+                          placeholder="Ej: 1.000"
+                          className="bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-indigo-200 mb-1">Estado de Pago al Aplicar</label>
+                        <select
+                          value={masivoMarcarEstado}
+                          onChange={(e) => setMasivoMarcarEstado(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-indigo-700 text-white text-xs font-bold"
+                        >
+                          <option value="PENDIENTE_CERO">Iniciar mes como Pendiente ($0 abonado)</option>
+                          <option value="AL_DIA_PAGADO">Dejar todos Al Día (Pagado total)</option>
+                          <option value="MANTENER">Mantener abonos actuales</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSyncing}
+                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow transition"
+                      >
+                        {isSyncing ? 'Sincronizando...' : 'Aplicar y Guardar en Nube'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* FILTROS Y BUSCADOR */}
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <select
@@ -1238,7 +1383,7 @@
 
                       <input
                         type="text"
-                        placeholder="Buscar ej: A11 o nombre..."
+                        placeholder="Buscar ej: B34 o nombre..."
                         value={busquedaDpto}
                         onChange={(e) => setBusquedaDpto(e.target.value)}
                         className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
@@ -1426,7 +1571,7 @@
                 </div>
               )}
 
-              {/* ADMIN TAB 4: EGRESOS Y COMUNICADOS */}
+              {/* ADMIN TAB 4: EGRESOS Y COMUNICADOS (CON INPUT DE MONEDA CON PUNTOS) */}
               {adminTab === 'egresos' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
@@ -1439,7 +1584,7 @@
                           id: `EGR-${egresos.length + 1}`,
                           categoria: nuevoEgreso.categoria,
                           proveedor: nuevoEgreso.proveedor || 'Proveedor Condominio',
-                          monto: Number(nuevoEgreso.monto),
+                          monto: Number(nuevoEgreso.monto) || 0,
                           fecha: new Date().toLocaleDateString('es-CL'),
                           estado: 'Pagado'
                         };
@@ -1463,13 +1608,14 @@
                         onChange={(e) => setNuevoEgreso({ ...nuevoEgreso, proveedor: e.target.value })}
                         className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
                       />
-                      <input
-                        type="number"
-                        placeholder="Monto en CLP (Ej: 250000)"
-                        value={nuevoEgreso.monto}
-                        onChange={(e) => setNuevoEgreso({ ...nuevoEgreso, monto: e.target.value })}
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
-                      />
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Monto en CLP ($)</label>
+                        <MoneyInput
+                          value={nuevoEgreso.monto}
+                          onChange={(val) => setNuevoEgreso({ ...nuevoEgreso, monto: val })}
+                          placeholder="Ej: 250.000"
+                        />
+                      </div>
                       <button type="submit" className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold">
                         Guardar Egreso
                       </button>
@@ -1550,69 +1696,21 @@
                   </div>
                 </div>
               )}
-
-              {/* ADMIN TAB 6: CONEXIÓN SUPABASE YA FIJA EN EL CÓDIGO */}
-              {adminTab === 'supabase' && (
-                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm max-w-2xl space-y-4">
-                  <h3 className="font-bold text-slate-900 text-lg">
-                    ⚡ Conexión Fija a tu Base de Datos Supabase
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Tus credenciales de Supabase ya vienen incrustadas por defecto en este archivo <code>index.html</code>.
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">1. SUPABASE_URL</label>
-                      <input
-                        type="text"
-                        value={supabaseUrl}
-                        onChange={(e) => setSupabaseUrl(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">2. SUPABASE_KEY</label>
-                      <input
-                        type="password"
-                        value={supabaseKey}
-                        onChange={(e) => setSupabaseKey(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      <button
-                        onClick={() => cargarDesdeSupabase(false)}
-                        disabled={isSyncing}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
-                      >
-                        🔄 Probar Conexión y Leer desde Supabase
-                      </button>
-                      <button
-                        onClick={sincronizar96DptosASupabase}
-                        disabled={isSyncing}
-                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
-                      >
-                        ☁️ Subir / Sincronizar los 96 Dptos a Supabase
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </main>
           )}
 
-          {/* MODAL PIN ADMINISTRADOR */}
+          {/* MODAL PIN ADMINISTRADOR (SIN PISTA DE CLAVE EN PANTALLA) */}
           {showPinModal && (
             <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <form onSubmit={handlePinSubmit} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
                 <h3 className="font-extrabold text-slate-900 text-lg">🔒 Acceso Administración</h3>
                 <p className="text-xs text-slate-500">
-                  Ingresa el PIN de seguridad del Condominio Portal de Lampa para desbloquear la edición de los 96 departamentos.
+                  Ingresa tu clave de seguridad de Administración para gestionar las 6 torres del Condominio Portal de Lampa.
                 </p>
                 <input
                   type="password"
                   autoFocus
-                  placeholder="...."
+                  placeholder="••••"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-center text-lg font-extrabold tracking-widest"
@@ -1636,7 +1734,7 @@
             </div>
           )}
 
-          {/* MODAL EDITAR DEPARTAMENTO (ADMIN) */}
+          {/* MODAL EDITAR DEPARTAMENTO INDIVIDUAL (CON FORMATO DE MILES Y SIN CERO MOLESTO) */}
           {editingDpto && (
             <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <form onSubmit={handleSaveDpto} className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
@@ -1653,16 +1751,17 @@
                       type="text"
                       value={editingDpto.residente}
                       onChange={(e) => setEditingDpto({ ...editingDpto, residente: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 mt-1"
                     />
                   </div>
                   <div>
                     <label className="font-bold text-slate-700">Teléfono WhatsApp</label>
                     <input
                       type="text"
+                      placeholder="+569..."
                       value={editingDpto.telefono}
                       onChange={(e) => setEditingDpto({ ...editingDpto, telefono: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 mt-1"
                     />
                   </div>
                   <div>
@@ -1670,7 +1769,7 @@
                     <select
                       value={editingDpto.estado}
                       onChange={(e) => setEditingDpto({ ...editingDpto, estado: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 mt-1 bg-slate-50 font-semibold"
                     >
                       <option>Al día</option>
                       <option>Pendiente</option>
@@ -1678,39 +1777,45 @@
                     </select>
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700">Gasto Común Base ($)</label>
-                    <input
-                      type="number"
+                    <label className="font-bold text-slate-700 mb-1 block">Gasto Común Base ($)</label>
+                    <MoneyInput
                       value={editingDpto.gasto_base}
-                      onChange={(e) => setEditingDpto({ ...editingDpto, gasto_base: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      onChange={(val) => setEditingDpto({ ...editingDpto, gasto_base: val })}
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700">Agua / Calefacción ($)</label>
-                    <input
-                      type="number"
+                    <label className="font-bold text-slate-700 mb-1 block">Agua / Calefacción ($)</label>
+                    <MoneyInput
                       value={editingDpto.agua_caliente}
-                      onChange={(e) => setEditingDpto({ ...editingDpto, agua_caliente: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      onChange={(val) => setEditingDpto({ ...editingDpto, agua_caliente: val })}
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700">Multas ($)</label>
-                    <input
-                      type="number"
+                    <label className="font-bold text-slate-700 mb-1 block">Fondo de Reserva ($)</label>
+                    <MoneyInput
+                      value={editingDpto.fondo_reserva}
+                      onChange={(val) => setEditingDpto({ ...editingDpto, fondo_reserva: val })}
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 mb-1 block">Multas ($)</label>
+                    <MoneyInput
                       value={editingDpto.multas}
-                      onChange={(e) => setEditingDpto({ ...editingDpto, multas: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      onChange={(val) => setEditingDpto({ ...editingDpto, multas: val })}
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700">Monto Abonado / Pagado ($)</label>
-                    <input
-                      type="number"
+                    <label className="font-bold text-slate-700 mb-1 block">Saldo Anterior ($)</label>
+                    <MoneyInput
+                      value={editingDpto.saldo_anterior}
+                      onChange={(val) => setEditingDpto({ ...editingDpto, saldo_anterior: val })}
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 mb-1 block">Monto Abonado / Pagado ($)</label>
+                    <MoneyInput
                       value={editingDpto.pagado}
-                      onChange={(e) => setEditingDpto({ ...editingDpto, pagado: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 mt-1"
+                      onChange={(val) => setEditingDpto({ ...editingDpto, pagado: val })}
                     />
                   </div>
                 </div>
