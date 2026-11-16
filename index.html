@@ -29,7 +29,7 @@
     // ============================================================================
     const DEFAULT_SUPABASE_URL = "https://ewksfaamizxugjxhxyiu.supabase.co";
     const DEFAULT_SUPABASE_KEY = "sb_publishable_Z-79MDbqVfis18UYIkh53Q_lz5-N0Ok";
-    const DEFAULT_ADMIN_PIN = "1770";
+    const DEFAULT_ADMIN_PIN = "admin1010";
 
     const TORRES = ['A', 'B', 'C', 'D', 'E', 'F'];
     const PISOS = [1, 2, 3, 4];
@@ -541,7 +541,7 @@
           setPinInput('');
           showToast('Modo Administrador desbloqueado');
         } else {
-          showToast('PIN incorrecto. Por defecto es 1770');
+          showToast('PIN incorrecto');
         }
       };
 
@@ -1612,7 +1612,7 @@
                 <input
                   type="password"
                   autoFocus
-                  placeholder="Ingresa PIN (1770)"
+                  placeholder="...."
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-center text-lg font-extrabold tracking-widest"
